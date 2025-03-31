@@ -1,18 +1,17 @@
-from fastapi import FastAPI
-from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, field_validator
 from datetime import datetime
+import json
 
-
+ 
 
 class DataBase():
     def __init__(self, db_path):
-        import json
         self.db_path = db_path
-        self.json = json
     
     def readDB(self):
         with open(self.db_path,"r") as file:
-            data = self.json.load(file)
+            data = json.load(file)
         return data
     
     def readAccounts(self):
@@ -23,20 +22,21 @@ class DataBase():
     
     def writeAccount(self, account : "Account"):
         data = self.readDB()
-        data["Accounts"].append(self.json.loads(account.model_dump_json()))
+        data["Accounts"].append(json.loads(account.model_dump_json()))
         with open(self.db_path,"w") as file:
-            self.json.dump(data,file,indent=4)
+            json.dump(data,file,indent=4)
 
     def writeInvoice(self, invoice : "Invoice"):
         data = self.readDB()
-        data["Invoices"].append(self.json.loads(invoice.model_dump_json()))
+        data["Invoices"].append(json.loads(invoice.model_dump_json()))
         with open(self.db_path,"w") as file:
-            self.json.dump(data,file,indent=4)
+            json.dump(data,file,indent=4)
 
 
 
 app = FastAPI()
 db = DataBase("./db.json")
+accounts_list = db.readAccounts()
 
 class Account(BaseModel):
     name : str
@@ -47,6 +47,13 @@ class Invoice(BaseModel):
     amount : str
     due : datetime
     issued : datetime
+
+    @field_validator("sender", "receiver")
+    def checkAccountExistance(cls , v : Account):
+        if json.loads(v.model_dump_json()) not in accounts_list:
+            raise ValueError("Account does not exist")
+        return v
+
 
 @app.get("/")
 def index():
@@ -68,4 +75,5 @@ def post_invoices(invoice : Invoice) -> Invoice:
 @app.post("/accounts")
 def post_acccount(account : Account) -> Account:
     db.writeAccount(account)
+    accounts_list.append(json.loads(account.model_dump_json()))
     return account
