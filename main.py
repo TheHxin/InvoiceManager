@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from datetime import datetime
 
-app = FastAPI()
+
 
 class DataBase():
     def __init__(self, db_path):
@@ -23,15 +23,20 @@ class DataBase():
     
     def writeAccount(self, account : "Account"):
         data = self.readDB()
-        data["Accounts"].append(account.model_dump_json())
+        data["Accounts"].append(self.json.loads(account.model_dump_json()))
         with open(self.db_path,"w") as file:
             self.json.dump(data,file,indent=4)
 
     def writeInvoice(self, invoice : "Invoice"):
         data = self.readDB()
-        data["Invoices"].append(invoice.model_dump_json())
+        data["Invoices"].append(self.json.loads(invoice.model_dump_json()))
         with open(self.db_path,"w") as file:
             self.json.dump(data,file,indent=4)
+
+
+
+app = FastAPI()
+db = DataBase("./db.json")
 
 class Account(BaseModel):
     name : str
@@ -39,7 +44,28 @@ class Account(BaseModel):
 class Invoice(BaseModel):
     sender : Account
     receiver : Account
-    amount : float
+    amount : str
     due : datetime
     issued : datetime
 
+@app.get("/")
+def index():
+    return "service is started"
+
+@app.get("/invoices")
+def getInvoices() -> list[Invoice]:
+    return db.readInvoices()
+
+@app.get("/accounts")
+def get_account() -> list[Account]:
+    return db.readAccounts()
+
+@app.post("/invoices")
+def post_invoices(invoice : Invoice) -> Invoice:
+    db.writeInvoice(invoice)
+    return invoice
+
+@app.post("/accounts")
+def post_acccount(account : Account) -> Account:
+    db.writeAccount(account)
+    return account
